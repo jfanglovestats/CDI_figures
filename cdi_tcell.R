@@ -1,90 +1,9 @@
 # cas_lsc123.R
-#### Description:
 
-#### Figure correspondence
-
-
-
-library(Matrix)
-library(matrixStats)
-library(MASS)
-library(doParallel) 
-library(Rcpp)
-library(truncnorm)
-library(data.table)
-library(mclust)
-library(Seurat)
-library(ggplot2)
-library(gridExtra)
-library(ggsci)
-library(RColorBrewer)
-library(grid) 
-library(pheatmap)
 
 
 # ------------------------------------------------------------------------------
-#                         Data loading
-# ------------------------------------------------------------------------------
-## From filter_tcell.R, we obtain the count matrix and cell_info data frame. 
-X = readRDS("Tcell_5type_filtered.rds")
-cinfo = readRDS("Tcell_5type_filtered_labels.rds")
-
-# ------------------------------------------------------------------------------
-#                         Candidate label sets
-# ------------------------------------------------------------------------------
-
-## Number of clusters
-ncl_vec = c(2,   3,    4,    5,    6,    7,    8,    10,   12,   14,   16)
-
-## Seurat
-seu_res = c(0.02, 0.05, 0.1,  0.3,  0.5,  0.6,  0.9,  1.3,  1.75, 2.1,  2.5)
-df = data.frame(seu_res, ncluster = seurat_lab(X, seu_res))
-
-## SC3
-start_time = Sys.time()
-sc3_lab(X, ncl_vec)
-end_time = Sys.time()
-end_time - start_time
-
-## CIDR
-start_time = Sys.time()
-cidr_lab(X, ncl_vec)
-end_time = Sys.time()
-end_time - start_time
-
-
-##	PCA
-X_pc = gcmat_pc(X, npc = 200)
-saveRDS(X_pc, paste0(set.indx, "_bc_pc200_countmat.rds"))
-X_pc = readRDS(paste0(set.indx, "_bc_pc200_countmat.rds"))
-
-## spectral
-start_time = Sys.time()
-spec_lab_pc(X_pc, ncl_vec)
-end_time = Sys.time()
-end_time - start_time
-
-## kmeans
-start_time = Sys.time()
-kmeans_lab_pc(X_pc, ncl_vec)
-end_time = Sys.time()
-end_time - start_time
-
-## HC
-start_time = Sys.time()
-hc_lab_pc(X_pc, ncl_vec)
-end_time = Sys.time()
-end_time - start_time
-
-# ------------------------------------------------------------------------------
-#                              Calculate CDI
-# ------------------------------------------------------------------------------
-
-# combine all labels as a data frame
-
-
-# ------------------------------------------------------------------------------
-#                      Figures (lineplot & Contingency) 
+#                            Figures (lineplot & Contingency) 
 # ------------------------------------------------------------------------------
 
 
@@ -96,10 +15,7 @@ cdi_df = aicbic_df %>%
 		"CDI_AIC" = "AIC" , "CDI_BIC" = "BIC")
 saveRDS(cdi_df, "~/lsc12356/tcell_cdi_df.rds")
 
-
-cdi_df = readRDS("~/lsc12356/tcell_cdi_df.rds")
-
-# cdi_df[which.min(cdi_df$CDI_BIC),]
+cdi_df[which.min(cdi_df$CDI_BIC),]
 
 
 size_factor_vec = SizeFactor(X)
@@ -160,6 +76,8 @@ dev.off()
 
 
 
+
+
 LabComp = function(trlab, givlab){
   if(any(givlab == "0")){
     labs_new = as.character(as.numeric(as.character(givlab)) +1)
@@ -215,29 +133,6 @@ LabComp(ctname$ct, readRDS(paste0(set.indx, "_SC3_k5_labs.rds"))[,1])
 dev.off()
 
 
-
-# ------------------------------------------------------------------------------
-#                             UMAP
-# ------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-# ------------------------------------------------------------------------------
-#                             GOF test
-# ------------------------------------------------------------------------------
-
-
-
-
-
-# ------------------------------------------------------------------------------
-#                             Other metrics
-# ------------------------------------------------------------------------------
 
 
 

@@ -1,12 +1,3 @@
-#### Description:
-
-
-
-
-
-
-
-
 # ------------------------------------------------------------------------------
 #                            Libraries 
 # ------------------------------------------------------------------------------
@@ -24,8 +15,6 @@ library(RColorBrewer)
 library(grid)
 library(pheatmap)
 library(ggsci)
-library(CDI)
-source("utils.R")
 
 
 
@@ -61,76 +50,183 @@ source("utils.R")
 # Rod bipolar cells: Rod bipolar cells
 
 
-scmat = readRDS("bipolar.RData")
 
 
-#... from cas_retina2.R get qc2_mat
+bipolar = readRDS("filtered_count.rds")
+# dim(bipolar)
+# 13166 27499
 
-X = as.matrix(qc2_mat)
-info = readRDS("bipolar_cell_info2.rds")
+info = readRDS("cell_info.rds")
+# dim(info)
+# 27499 4
+cell_label = as.character(info[,2])
 
 
+## select verified cell types
+verified_celltype = c("RBC","Muller_glia","BC1A","BC1B","BC2","BC3A","BC3B","BC4",
+                      "BC5A","BC5B","BC5C","BC5D","BC6","BC7","BC8_BC9", "Amacrine", 
+                      "Rod_photoreceptors","Cone_photoreceptors")
+
+cell_indx = c(1:length(cell_label))[cell_label %in% verified_celltype]
+info = info[cell_indx,]
+select_bipolar = bipolar[,cell_indx]
+select_celllabel = info[,2]
+
+
+
+
+PreprocessSelectGenes = function(scdata, min_nzc = 100, min_nzc_prop = 0.02){
+  nzc_of_each_gene = rowSums(scdata>0)
+  nc = ncol(scdata)
+  select_gene = c(1:nrow(scdata))[(nzc_of_each_gene > min_nzc) | (nzc_of_each_gene/nc > min_nzc_prop)]
+  # return gene index
+  return(select_gene)
+}
+
+
+filter_gene = PreprocessSelectGenes(select_bipolar, min_nzc = 100, min_nzc_prop = 0.02)
+
+X = as.matrix(select_bipolar[filter_gene,])
+
+
+para.list = list(K = length(unique(info$cell_type)),
+                 ncell = ncol(X),
+                 ngene = nrow(X),
+                 nbatch = length(unique(info$Batch)),
+                 Celltype = info$cell_type,
+                 Batch = info$Batch,
+                 nfeature = 500,
+                 ncore = 20)
+para.set = para.list
+set.indx = "bp1212"
 
 # ------------------------------------------------------------------------------
-#                       Generate Candidate Labels
+#                       Batch effect correction
 # ------------------------------------------------------------------------------
 
-### Batch effect correction with Seurat
+
 Seurat.obj = CreateSeuratObject(counts = X, project = set.indx, min.cells = 0, min.features = 0)
 Seurat.obj = NormalizeData(Seurat.obj)
 Seurat.obj = FindVariableFeatures(Seurat.obj, selection.method = "vst", nfeatures = 2000)
 Seurat.obj = ScaleData(Seurat.obj, verbose = FALSE)
 Seurat.obj = RunPCA(Seurat.obj, npcs = 30, verbose = FALSE)
 Seurat.obj = RunUMAP(Seurat.obj, reduction = "pca", dims = 1:20)
+
+## colnames(X) and rownames(Seurat.obj@meta.data) are the same
 Seurat.obj@meta.data["batch"] = para.set$Batch
+
+##
 Seurat.obj.list <- SplitObject(Seurat.obj, split.by = "batch")
 Seurat.obj.list <- lapply(X = Seurat.obj.list, FUN = function(x) {
   x <- NormalizeData(x)
   x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
 })
+
+
 Seurat.obj.anchors <- FindIntegrationAnchors(object.list = Seurat.obj.list, 
                                              dims = 1:30, 
-                                             anchor.features = 2000)
+                                             anchor.features = 2000 #default setting
+)
+
 Seurat.obj.integrated <- IntegrateData(anchorset = Seurat.obj.anchors, 
                                        features.to.integrate = Seurat.obj.anchors@anchor.features, 
                                        dims = 1:30)
-saveRDS(Seurat.obj.integrated, paste0(set.indx, "Seurat_integrated_obj.rds"))
+DefaultAssay(Seurat.obj.integrated)
+
+saveRDS(Seurat.obj.integrated, "Seurat_integrated_obj.rds")
+
 X_bc_unsorted = as.matrix(Seurat.obj.integrated[["RNA"]]@data)
 col_indx = colnames(X)
 X_bc = X_bc_unsorted[, col_indx]
 saveRDS(X_bc, "retina_bc_countmat.rds")
 
 
-#### Generate candidate label sets with batch effect corrected count
 
+# Seurat.obj.integrated = readRDS("Seurat_integrated_obj.rds")
+
+
+# ------------------------------------------------------------------------------
+#                       Generate Candidate Labels
+# ------------------------------------------------------------------------------
+
+# X_bc = readRDS("retina_bc_countmat.rds")
+# Seurat.obj.integrated = readRDS("retina_seurat_integrated_obj.rds")
 
 ## Seurat
-Seurat.obj.integrated = readRDS(paste0(set.indx, "Seurat_integrated_obj.rds"))
-ncl_vec = c(5,     10,   15,     16,    17,     18,    19,    20,     25,     30)
-seu_res = c(0.0035,0.01, 0.1,    0.18,   0.3,    0.5,    0.6,  0.71,   1.2,    2)
+ncl_vec = c(5,     10,   15,     16,    17,     18,    19,    20,     25,     30,    31,    32,     33,       35)
+seu_res = c(0.0035,0.01, 0.1,    0.18,   0.3,    0.5,    0.6,  0.71,   1.2,   2.15,  2.30,  2.60,  2.84,     3.20)
 seurat_lab_bc(Seurat.obj.integrated, seu_res, colnames(X))
 
 
 
 
+## SC3
+start_time = Sys.time()
+sc3_lab_large(X, ncl_vec)
+end_time = Sys.time()
+end_time - start_time
+
+## CIDR
+start_time = Sys.time()
+cidr_lab(X, ncl_vec)
+end_time = Sys.time()
+end_time - start_time
+
+
+X_bc = readRDS("retina_bc_countmat.rds")
+X_bc_pc = gcmat_pc(X_bc, npc = 200)
+saveRDS(X_bc_pc, "retina_bc_pc200_countmat.rds")
+X_bc_pc = readRDS("retina_bc_pc200_countmat.rds")
+
+## spectral
+# start_time = Sys.time()
+# spec_lab_pc(X_bc_pc, ncl_vec)
+# end_time = Sys.time()
+# end_time - start_time
+# failed to give output within 24h
+
+## kmeans
+start_time = Sys.time()
+kmeans_lab_pc(X_bc_pc, ncl_vec)
+end_time = Sys.time()
+end_time - start_time
+#52.65812 secs
+
+## HC
+start_time = Sys.time()
+hc_lab_pc(X_bc_pc, ncl_vec)
+end_time = Sys.time()
+end_time - start_time
+#4.596798 mins
 
 
 
+## combine all labels as a data frame
+set.indx = "bp1212"
+method_name = c("CIDR", "KMeans", "HC", "SC3", "Seurat")
+lab_df = data.frame(tmp = rep(NA, ncol(X)))
+for(k in seq_len(length(method_name))){
+  for(i in seq_len(length(ncl_vec))){
+    cur_df = readRDS(paste0(set.indx, "_", method_name[k], "_k", ncl_vec[i], "_labs.rds"))
+    colnames(cur_df) = paste0(method_name[k], "_k", ncl_vec[i])
+    lab_df = cbind(lab_df, cur_df)
+  }
+}
+lab_df = lab_df[,-1]
 
 # ------------------------------------------------------------------------------
 #                           Feature Selection 
 # ------------------------------------------------------------------------------
 
-## select genes 
+selected_feature = feature_gene_selection(
+  gcmat = X, 
+  Seurat_obj = NULL,
+  method = "wds",
+  nfeature = 500,
+  batch_label = info$Batch,
+  zp_threshold = 0.95)
 
-feature_gene_indx = FeatureGeneSelection(gcmat = X, 
-                                         batch_label = info$Batch, 
-                                         method = "wds", 
-                                         nfeature = 500)
-sub_X = X[feature_gene_indx,]
-
-
-
+X_sub = X[selected_feature, ]
 
 
 # ------------------------------------------------------------------------------
@@ -148,23 +244,24 @@ sub_X = X[feature_gene_indx,]
 #                           Calculate CDI
 # ------------------------------------------------------------------------------
 
-## calculate size factor
-size_factor_vec = SizeFactor(X)
+# library(BiocParallel)
+# library(stringr)
 
-## combine all labels as a data frame
-cluster_number = c(5,     10,   15,     16,    17,     18,    19,    20,     25,     30,  31, 32, 33, 35)
-ncluster = length(cluster_number)
-method_name = c("KMeans", "HC", "CIDR", "SC3", "Seurat")
-nmethod = length(method_name)
-lab_df = matrix(NA, nrow = para.set$ncell, ncol = ncluster*nmethod)
-colnames(lab_df) = paste0("tmp_", c(1:(ncluster*nmethod)))
+X_sc = size_factor(X)
 
 
+aicbic_df = calculate_CDI(
+  sub_gcmat = X_sub,
+  Seurat_obj = NULL,
+  cand_lab_df = lab_df, 
+  cell_size_factor = X_sc, 
+  batch_label = info$Batch,
+  lrt_pval_threshold = 0.01,
+  clustering_method = NULL,
+  ncore = 20)
 
-
-# ... update with new package functions
-
-# saveRDS(cdi_df, "cdi_df.rds")
+aicbic_df[aicbic_df$Cluster_method == "Seurat", ]
+saveRDS(aicbic_df, "~/to_save/retina/retina_cdi_df.rds")
 
 
 

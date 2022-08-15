@@ -12,7 +12,7 @@ Clustering deviation index (CDI) package is now available as an [R package](http
 
 ## Simulation
 
-**SDX/sdX.R** ($X = 1, 2, 3, 4$) - Codes for simulating setting SD1 (10 equal-sized clusters), SD2 (rare cell populations), SD3 (main type and subtypes), and SD4 (splatter simulated dataset).
+**SDX/sdX.R** (X = 1, 2, 3, 4) - Codes for simulating setting SD1 (10 equal-sized clusters), SD2 (rare cell populations), SD3 (main type and subtypes), and SD4 (splatter simulated dataset).
 
 - Simulation setting
 
@@ -31,7 +31,7 @@ Clustering deviation index (CDI) package is now available as an [R package](http
 - UMAPS from selected Features -- Fig.3
 
 
-`**SD2/sd2_rare_sensitivity.R**` Codes for sensitivity analysis of the number of cells in rare cell population -- Fig. S11
+**SD2/sd2_rare85cell.R, SD2/sd2_rare20cell.R** Codes for sensitivity analysis of the number of cells in rare cell population -- Fig. S11
 
 
 ## CT26WT
@@ -65,7 +65,7 @@ Intermediate results: wt1_tpm_gs_nb_pval_df.rds, wt1_tpm_gc_zinb_pval_df.rds, wt
 
 ## TCELL (3k)
 
-`**tcell_filter.R** - Select five distinct T-CELL groups and filter genes and cells`
+**tcell_filter.R** - Select five distinct T-CELL groups from raw counts and filter genes and cells
 
 Output: Tcell_5type_filtered.rds, Tcell_5type_filtered_labels.rds
 
